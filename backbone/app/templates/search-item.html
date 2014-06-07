@@ -1,0 +1,10 @@
+<td class="rw"><small title="<%- md5 %>"><%- id %></small><br/><small class="muted" title="&nbsp; &nbsp;Added: <%- timestamp(timeadded) %>&#13;&#10;Modified: <%- timestamp(timelastmodified) %>"><%- datestamp(timeadded) %></small></td>
+<td><%- author %></td>
+<td><a target="_blank" href="<%- meta.get('view_url').replace('{md5}',md5).replace('{id}',id) %>"><% if (series||periodical) { %><% if (series) { %><i><%- series %></i><% } %><% if (series&&periodical) { %> <% } %><% if (periodical) { %><em><%- periodical %></em><% } %><br/><% } %><%- title %><% if (edition||volumeinfo) { %> <i>[<% if (edition) { %><%- /^[0-9]+$/.test(edition)?edition+" ed.":edition %><% } %><% if (edition&&volumeinfo) { %>, <% } %><% if (volumeinfo) { %><%- /^[0-9]+$/.test(volumeinfo)?"Vol. "+volumeinfo:volumeinfo %><% } %>]</i><% } %></a></td>
+<td><%- publisher %></td>
+<td><%- year %></td>
+<td><%- pages %></td>
+<td class="nw"><%- language %></td>
+<td class="rw"><span title="<%- filesize.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') %>"><%= filesize<1024?filesize+" b":filesize<1024*1024?(filesize/1024).toFixed()+" kb":filesize<100*1024*1024?(filesize/1024/1024).toFixed()+" Mb":"<b>"+(filesize/1024/1024).toFixed()+" Mb</b>" %></span></td>
+<td class="nw"><%- extension %></td>
+<td class="cw"><% for(var i=0; i<mirror_list.length; i++) { %><a target="_blank" href="<%- mirror_list[i].replace('{md5}',md5).replace('{id}',id) %>" class="btn btn-mini btn-info"><%- i+1 %></a><% } %><a target="_blank" href="<%- meta.get('edit_url').replace('{md5}',md5).replace('{id}',id) %>" class="btn btn-mini">Edit</a></td>

@@ -1,0 +1,89 @@
+
+body {
+  /* padding-top: 60px; navbar-static-top */
+}
+
+.footer {
+  background-color: #F5F5F5;
+  border-top: 1px solid #E5E5E5;
+  margin-top: 0;
+  padding: 10px 0;
+  text-align: center;
+}
+
+.footer p { 
+  color: #777777;
+  margin-bottom: 0px;
+}
+
+.content-region {
+  padding-top: 20px;
+  min-height: 400px;
+}
+
+/* bootstrap dropdown list customize */
+
+.dropdown-menu > .active > a,
+.dropdown-menu > .active > a:focus {
+  color: #333333;
+  text-decoration: none;
+  background-color: #a9dba9;
+  background-image: none;
+  filter: progid:DXImageTransform.Microsoft.gradient(enabled=false);
+}
+
+/* search form */
+
+.form-inline .checkbox {
+  margin-left: 1em;
+}
+
+.form-inline .checkbox.label-search-select-all {
+  margin-left: 330px;
+}
+
+.label-sortorder {
+  margin-left: 50px;
+}
+
+.label-filter {
+  margin-left: 50px;
+}
+
+/* results table */
+
+.itemlist {
+  font-size: 100%;
+  font-family: "Times New Roman", Times, serif;
+}
+.itemlist th,
+.itemlist td {
+  padding: 2px 8px;
+  line-height: 130%;
+  text-align: left;
+  vertical-align: top;
+}
+
+.itemlist i {
+  font-size: 90%;
+  color: #499249;
+}
+
+.itemlist em {
+  font-size: 90%;
+  color: #808080;
+}
+
+.itemlist .nw {
+  white-space: nowrap;
+}
+
+.itemlist .rw {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.itemlist .cw {
+  white-space: nowrap;
+  text-align: center;
+}

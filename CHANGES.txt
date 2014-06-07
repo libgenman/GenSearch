@@ -1,0 +1,23 @@
+
+Version 0.4 (2014-02-09):
+
+  * Added script for merging delta index into main index to speedup subsequent updates.
+  * Added filter for displaying hidden and banned books.
+  * Changed incremental update scheme to Sphinx xmlpipe for killlist support.
+
+Version 0.3 (2014-01-20):
+
+  * Fixed bug in incremental update preventing updates when last updated record modified on server.
+  * Added configurable list of mirrors and edit/view pages.
+
+Version 0.2 (2014-01-16):
+
+  * Added incremental update from server over JSON.
+  * Added all-match search with "*" for enable getting all recently added books.
+  * Added FLASK_PORT option.
+  * Fixed small bugs in JavaScript front-end.
+
+Version 0.1 (2014-01-04):
+  
+  * Initial release.
+

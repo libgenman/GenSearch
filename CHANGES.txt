@@ -1,4 +1,9 @@
 
+Version 0.5 (2014-06-07):
+
+  * Fixed bug in XML parsing of ASCII control codes.
+  * Added Filename field to database.
+
 Version 0.4 (2014-02-09):
 
   * Added script for merging delta index into main index to speedup subsequent updates.

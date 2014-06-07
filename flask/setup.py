@@ -13,7 +13,7 @@ base = None
 
 setup(
     name = "flask",
-    version = "0.4",
+    version = "0.5",
     description = "Flask App",
     options = {"build_exe": build_exe_options},
     executables = [

@@ -99,7 +99,7 @@ SPHINX_FIELDS=[
     "Filesize",         # bigint   
     "ExtensionAttr",
 
-#    "Filename",
+    "Filename",
     "Coverurl",
 
     "Generic",
@@ -113,6 +113,41 @@ SPHINX_FIELDS=[
     "TimeLastModified", # timestamp
 
 ]
+
+ESCAPE_ENTITIES={
+    '\x00': " ",
+    '\x01': " ",
+    '\x02': " ",
+    '\x03': " ",
+    '\x04': " ",
+    '\x05': " ",
+    '\x06': " ",
+    '\x07': " ",
+    '\x08': " ",
+    #'\x09': "&#x09;",
+    #'\x0A': "&#x0A;",
+    '\x0B': " ",
+    '\x0C': " ",
+    #'\x0D': "&#x0D;",
+    '\x0E': " ",
+    '\x0F': " ",
+    '\x10': " ",
+    '\x11': " ",
+    '\x12': " ",
+    '\x13': " ",
+    '\x14': " ",
+    '\x15': " ",
+    '\x16': " ",
+    '\x17': " ",
+    '\x18': " ",
+    '\x19': " ",
+    '\x1A': " ",
+    '\x1B': " ",
+    '\x1C': " ",
+    '\x1D': " ",
+    '\x1E': " ",
+    '\x1F': " ",
+}
 
 def maindb_maxid(indexname='libgenmain'):
     mysql = MySQL(app)
@@ -180,7 +215,7 @@ def main():
 
                 xmlout.write('<sphinx:document id="%d">\n'%data['ID'])
                 for fieldname in xmlfields:
-                    xmlout.write(u'<%s>%s</%s>\n'%(fieldname.lower(),escape(str(data[fieldname]).decode('utf-8')),fieldname.lower()))
+                    xmlout.write(u'<%s>%s</%s>\n'%(fieldname.lower(),escape(str(data[fieldname]).decode('utf-8'),ESCAPE_ENTITIES),fieldname.lower()))
                 xmlout.write('</sphinx:document>\n')
                 xmlout.write('\n')
             fd.close()

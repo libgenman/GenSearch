@@ -48,6 +48,13 @@ class MySQL(object):
             kwargs['charset'] = self.app.config['MYSQL_DATABASE_CHARSET']
         self.conn=MySQLdb.connect(**kwargs)
         return self.conn
+    
+    def tryconnect(self):
+        try:
+            self.connect()
+        except MySQLdb.OperationalError:
+            return False
+        return True
 
     def close(self):
         if self.conn is not None:

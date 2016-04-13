@@ -1,4 +1,9 @@
 
+Version 0.6 (2016-04-13):
+
+  * Database schema update. Most update-critical settings moved to configuration file.
+  * Fixed small bugs in csv import/export.
+
 Version 0.5 (2014-06-07):
 
   * Fixed bug in XML parsing of ASCII control codes.

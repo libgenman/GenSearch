@@ -18,19 +18,6 @@ from connmysql import MySQL, timestamp2datetime
 
 from app import *
 
-JSONAPI_FIELDS = [
-    'ID', 'Title', 'VolumeInfo', 'Series', 'Periodical', 'Author', 'Year',
-    'Edition', 'Publisher', 'City', 'Pages', 'Language', 'Topic', 'Library',
-    'Issue', 'Identifier', 'ISSN', 'ASIN', 'UDC', 'LBC', 'DDC', 'LCC', 'Doi',
-    'Googlebookid', 'OpenLibraryID', 'Commentary', 'DPI', 'Color', 'Cleaned',
-    'Orientation', 'Paginated', 'Scanned', 'Bookmarked', 'Searchable', 'Filesize',
-    'Extension', 'MD5', 'CRC32', 'eDonkey', 'AICH', 'SHA1', 'TTH', 'Generic',
-    'Filename', 'Visible', 'Locator', 'Local', 'TimeAdded', 'TimeLastModified', 'Coverurl'
-]
-
-JSONAPI_RETRY_COUNT = 3
-JSONAPI_RETRY_DELAY = 1
-
 UPDATE_DIR='delta'
 UPDATE_FILENAME='libgenupdate.csv'
 
@@ -74,8 +61,9 @@ def deflate(data):   # zlib only provides the zlib compress format, not the defl
 
 def parse_csvfile_timeid(fpath):
     
-    id_pos = JSONAPI_FIELDS.index('ID')
-    time_pos = JSONAPI_FIELDS.index('TimeLastModified')
+    csv_fields=app.config['CSV_FIELDS']
+    id_pos = csv_fields.index('ID')
+    time_pos = csv_fields.index('TimeLastModified')
     
     timeid_first = None
     timeid_last = None
@@ -101,17 +89,20 @@ def parse_csvfile_timeid(fpath):
 
 def json_update(fpath,timeid):
 
-    id_pos = JSONAPI_FIELDS.index('ID')
-    time_pos = JSONAPI_FIELDS.index('TimeLastModified')
+    csv_fields=app.config['CSV_FIELDS']
+    id_pos = csv_fields.index('ID')
+    time_pos = csv_fields.index('TimeLastModified')
 
     jsonapi_url = app.config['JSONAPI_URL']
+    jsonapi_retry_count = app.config['JSONAPI_RETRY_COUNT']
+    jsonapi_retry_delay = app.config['JSONAPI_RETRY_DELAY']
     
     print('Updating from server %s'%(jsonapi_url))
 
     with open(fpath,'a+b') as csvfile:
         writer = csv.writer(csvfile,dialect=csvlib.LibGenDialect)    
         
-        #fields = ','.join(JSONAPI_FIELDS)
+        #fields = ','.join(csv_fields)
         fields='*'
         
         while True:
@@ -123,15 +114,17 @@ def json_update(fpath,timeid):
                     datarows = json.load(urlopen(url))
                     break
                 except (HTTPError, URLError) as e:
-                    if retry > JSONAPI_RETRY_COUNT:
+                    if retry > jsonapi_retry_count:
                         raise
                     print('Retry %s'%(str(e)))
-                    time.sleep(JSONAPI_RETRY_DELAY)
+                    time.sleep(jsonapi_retry_delay)
             
             for data in datarows:
+                #if len(data)!=len(csv_fields):
+                #    raise Exception('DB Scheme problem')
                 row=[]
-                for field in JSONAPI_FIELDS:
-                    row.append(data[field].encode('utf-8'))                            
+                for field in csv_fields:
+                    row.append(data[field].replace('\0','\\0').encode('utf-8')) # avoid NUL otherwise csv.writer.writerow() will truncate the field
                                     
                 timeid = (row[time_pos],row[id_pos])
                 
@@ -151,9 +144,11 @@ def maindb_timeid(indexname='libgenmain'):
     mysql.connect()
     cursor = mysql.cursor()
     cursor.execute("SELECT MAX(TimeLastModified) FROM %s"%indexname)
-    timestamp = cursor.fetchone()[0]
+    res = cursor.fetchone()
+    timestamp = 0 if res==None else res[0]
     cursor.execute("SELECT MAX(ID) FROM %s WHERE TimeLastModified=%s"%(indexname,timestamp))
-    maxid = cursor.fetchone()[0]
+    res = cursor.fetchone()
+    maxid = 0 if res==None else res[0]
     last_id = str(maxid)
     last_datetime = timestamp2datetime(timestamp)
     return (last_datetime,last_id)
@@ -203,14 +198,8 @@ def main():
 
     print('')
     
-    #subprocess.call([os.path.join('bin','searchd'),'--stop'])
-    
-    #time.sleep(1)
-    
     subprocess.call([os.path.join('bin','indexer'),'--rotate','libgendelta'])
         
-    #subprocess.Popen([os.path.join('bin','searchd'),'--pidfile'])
-    
 
 if __name__ == '__main__':
     main()

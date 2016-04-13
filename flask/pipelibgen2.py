@@ -15,104 +15,6 @@ from connmysql import MySQL
 
 from app import *
 
-CSV_DIR = 'delta'
-
-CSV_FIELDS=[
-    "ID","Title","VolumeInfo","Series","Periodical","Author","Year","Edition","Publisher","City","Pages","Language",
-    "Topic","Library","Issue","Identifier","ISSN","ASIN","UDC","LBC","DDC","LCC","Doi","Googlebookid","OpenLibraryID",
-    "Commentary","DPI","Color","Cleaned","Orientation","Paginated","Scanned","Bookmarked","Searchable","Filesize","Extension",
-    "MD5","CRC32","eDonkey","AICH","SHA1","TTH","Generic","Filename","Visible","Locator","Local","TimeAdded","TimeLastModified","Coverurl"
-]
-
-SPHINX_VISIBLE_ENUM={ '':0, 'no':1, 'ban': 2 }
-SPHINX_ATTR_DUPLICATE=["MD5","Series","Periodical","Author","Title","Year","VolumeInfo","Publisher","Language","Identifier","Extension"]
-SPHINX_ATTR_SUFFIX="Attr"
-SPHINX_FIELDS=[
-    "ID",
-
-    "MD5",
-        
-    "Series",
-    "Periodical",
-    "Author",
-    "Title",
-    "Year",
-    "VolumeInfo",
-    "Publisher",
-    "Language",
-    "Identifier",
-    "Extension",
-
-    "MD5Attr",
-
-    "SeriesAttr",
-    "PeriodicalAttr",
-
-    "AuthorAttr",
-    "TitleAttr",
-    "YearAttr",
-
-    "VolumeInfoAttr",
-
-    "Edition",
-
-    "PublisherAttr",
-    "City",
-
-    "Pages",
-
-    "LanguageAttr",
-
-#    "Topic",
-
-#    "Library",
-#    "Issue",
-#    "Commentary",
-
-#    "DPI",              # uint
-#    "Color",
-#    "Cleaned",
-#    "Orientation",
-#    "Paginated",
-#    "Scanned",
-#    "Bookmarked",
-#    "Searchable",
-
-    "IdentifierAttr",
-#    "ISSN",
-#    "ASIN",
-#    "Doi",
-#    "Googlebookid",
-#    "OpenLibraryID",
-
-#    "UDC",
-#    "LBC",
-#    "DDC",
-#    "LCC",
-#
-#    "CRC32",
-#    "eDonkey",
-#    "AICH",
-#    "SHA1",
-#    "TTH",
-    
-    "Filesize",         # bigint   
-    "ExtensionAttr",
-
-    "Filename",
-    "Coverurl",
-
-    "Generic",
-    "Visible",
-
-#    "Locator",
-
-    #"Local",
-
-    "TimeAdded",        # timestamp
-    "TimeLastModified", # timestamp
-
-]
 
 ESCAPE_ENTITIES={
     '\x00': " ",
@@ -151,15 +53,23 @@ ESCAPE_ENTITIES={
 
 def maindb_maxid(indexname='libgenmain'):
     mysql = MySQL(app)
-    mysql.connect()
+    if not mysql.tryconnect():
+        return 0
     cursor = mysql.cursor()
     cursor.execute("SELECT MAX(ID) FROM %s"%indexname)
-    maxid = cursor.fetchone()[0]
+    res = cursor.fetchone()
+    maxid  = 0 if res==None else res[0]
     return maxid
 
-def main():
+def main(csv_dir='delta'):
 
-    xmlfields=SPHINX_FIELDS[2:] # skip ID
+    csv_fields = app.config['CSV_FIELDS']
+    sphinx_visible_enum = app.config['SPHINX_VISIBLE_ENUM']
+    sphinx_attr_duplicate = app.config['SPHINX_ATTR_DUPLICATE']
+    sphinx_attr_suffix = app.config['SPHINX_ATTR_SUFFIX']
+    sphinx_fields = app.config['SPHINX_FIELDS']    
+
+    xmlfields=sphinx_fields[1:] # skip ID
     
     maxid = maindb_maxid()
     killlist = {}
@@ -171,13 +81,13 @@ def main():
     xmlout.write('<sphinx:docset>\n')
     xmlout.write('\n')
     
-    flist = csvlib.sort_listdir(os.path.join(PROJECT_ROOT,CSV_DIR))
+    flist = csvlib.sort_listdir(os.path.join(PROJECT_ROOT,csv_dir))
 
     for fpath in flist:
         fd = csvlib.open_csvfile(fpath)
         if fd:
 
-            reader=csv.DictReader(fd,CSV_FIELDS,dialect=csvlib.LibGenDialect)
+            reader=csv.DictReader(fd,csv_fields,dialect=csvlib.LibGenDialect)
 
             for linenum,row in enumerate(reader):
                 id = int(row['ID'])
@@ -188,7 +98,7 @@ def main():
             # reopen file
             
             fd = csvlib.open_csvfile(fpath)
-            reader=csv.DictReader(fd,CSV_FIELDS,dialect=csvlib.LibGenDialect)
+            reader=csv.DictReader(fd,csv_fields,dialect=csvlib.LibGenDialect)
             
             for linenum,row in enumerate(reader):
                 data=dict(row)
@@ -198,16 +108,16 @@ def main():
                     killlist[id] = id
                 if linenum != linelist[id]:
                     continue # skip doubles except last
-                data['ID'] = id
+                data['ID'] = id                
                                 
-                data['Visible']=SPHINX_VISIBLE_ENUM[row['Visible']]
+                data['Visible']=sphinx_visible_enum[row['Visible']]
 
                 # Add backing attrs
-                for field in SPHINX_ATTR_DUPLICATE:
-                    data[field+SPHINX_ATTR_SUFFIX]=row[field]
+                for field in sphinx_attr_duplicate:
+                    data[field+sphinx_attr_suffix]=row[field]
 
-                # Preprocess ISBN
-                data['Identifier']=data['Identifier'].replace('-','') # remove slashes from ISBN in fulltext
+                # Preprocess ISBN (Not needed anymore because IdentifierWODash is added to DB)
+                #data['Identifier']=data['Identifier'].replace('-','') # remove slashes from ISBN in fulltext
 
                 # Convert dates to timestamps
                 data['TimeAdded']=datetime2timestamp(row['TimeAdded'])
@@ -231,4 +141,4 @@ def main():
     xmlout.write('</sphinx:docset>\n')
 
 if __name__ == '__main__':
-    main()
+    main(*sys.argv[1:])

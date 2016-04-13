@@ -12,7 +12,7 @@ import csv
 class LibGenDialect(csv.Dialect):
     delimiter = ','
     quotechar = '"'
-    escapechar = '\\'
+    escapechar = None
     doublequote = True
     skipinitialspace = False
     lineterminator = '\n'

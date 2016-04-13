@@ -5,6 +5,8 @@ build_exe_options = {
     'packages': ["flask_restful"], 
     'includes': ["jinja2.ext"], # http://stackoverflow.com/questions/14041450/using-cx-freeze-on-flask-app
     'excludes': ["Tkinter"],
+    #'constants': ['BUILD_HOST=1'],
+    'replace_paths' : [('*','')],
 }
 
 base = None

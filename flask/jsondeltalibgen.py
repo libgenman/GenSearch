@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import os
-
 import json
 import time
+import random
 import urllib2
 from urllib import quote_plus
 from urllib2 import urlopen, HTTPError, URLError
@@ -70,7 +70,7 @@ def parse_csvfile_timeid(fpath):
     try:
         csvfile=open(fpath,'r+b')           
         try:
-            reader = csv.reader(csvfile,dialect=csvlib.LibGenDialect)                   
+            reader = csv.reader(csvfile,dialect=csvlib.LibGenDialect)
             for row in reader:
                 if timeid_first == None:
                     timeid_first = (row[time_pos],row[id_pos])
@@ -87,26 +87,23 @@ def parse_csvfile_timeid(fpath):
         return None, None
 
 
-def json_update(fpath,timeid):
+def json_update(fpath,timeid,jsonapiurl):
 
     csv_fields=app.config['CSV_FIELDS']
     id_pos = csv_fields.index('ID')
     time_pos = csv_fields.index('TimeLastModified')
 
-    jsonapi_url = app.config['JSONAPI_URL']
     jsonapi_retry_count = app.config['JSONAPI_RETRY_COUNT']
     jsonapi_retry_delay = app.config['JSONAPI_RETRY_DELAY']
     
-    print('Updating from server %s'%(jsonapi_url))
-
     with open(fpath,'a+b') as csvfile:
-        writer = csv.writer(csvfile,dialect=csvlib.LibGenDialect)    
+        writer = csv.writer(csvfile,dialect=csvlib.LibGenDialect)
         
-        #fields = ','.join(csv_fields)
         fields='*'
+        #fields = ','.join(csv_fields)
         
         while True:
-            url = jsonapi_url + "?fields=%s&timenewer=%s&idnewer=%s&mode=newer" % (quote_plus(fields,','),quote_plus(timeid[0]),quote_plus(timeid[1]))
+            url = jsonapiurl + "?fields=%s&timenewer=%s&idnewer=%s&mode=newer" % (quote_plus(fields,','),quote_plus(timeid[0]),quote_plus(timeid[1]))
             retry = 0
             while True:
                 try:
@@ -115,13 +112,11 @@ def json_update(fpath,timeid):
                     break
                 except (HTTPError, URLError) as e:
                     if retry > jsonapi_retry_count:
-                        raise
+                        return False
                     print('Retry %s'%(str(e)))
                     time.sleep(jsonapi_retry_delay)
             
             for data in datarows:
-                #if len(data)!=len(csv_fields):
-                #    raise Exception('DB Scheme problem')
                 row=[]
                 for field in csv_fields:
                     row.append(data[field].replace('\0','\\0').encode('utf-8')) # avoid NUL otherwise csv.writer.writerow() will truncate the field
@@ -160,9 +155,9 @@ def json_delta():
     
     csvfpath=os.path.join(PROJECT_ROOT,UPDATE_DIR,UPDATE_FILENAME)
     
-    timeid_first, timeid_last = parse_csvfile_timeid(csvfpath)    
+    timeid_first, timeid_last = parse_csvfile_timeid(csvfpath)
     if timeid_first:
-        print('Delta First   %s %s'%(timeid_first[0],timeid_first[1]))        
+        print('Delta First   %s %s'%(timeid_first[0],timeid_first[1]))
     if timeid_last:
         print('Delta Last    %s %s'%(timeid_last[0],timeid_last[1]))
 
@@ -176,12 +171,37 @@ def json_delta():
             timeid_last = timeid_main
     
     print('Updating from %s %s'%(timeid_last[0],timeid_last[1]))
-    
-    json_update(csvfpath,timeid_last)
+
+    somesuccess = False
+    mirrorgroups = app.config['JSONAPI_URL_LIST']
+    for num,mirrorlist in enumerate(mirrorgroups):
+        print('')
+        print('Server group %d:'%(num+1))
+        random.shuffle(mirrorlist)
+        groupsuccess = False
+        for mirrorurl in mirrorlist:
+            print('')
+            print('Updating from server %s'%(mirrorurl))
+            timeid = json_update(csvfpath,timeid_last,mirrorurl)
+            if timeid==False:
+                print('Updating from server %s FAILED!'%(mirrorurl))
+                continue # proceeding to next server in this mirror group
+            timeid_last = timeid
+            somesuccess = True
+            groupsuccess = True
+            break
+        if num==len(mirrorgroups)-1:
+            if not groupsuccess:
+                print('')
+                print('Update from last server group FAILED!!')
+    if not somesuccess:
+        print('')
+        print('ALL SERVERS FAILED!!!')
+    return somesuccess
 
 def main():
 
-    proxy = app.config.setdefault('HTTP_PROXY', None)    
+    proxy = app.config.setdefault('HTTP_PROXY', None)
     if proxy:
         proxy_handler = urllib2.ProxyHandler({'http': proxy})
         opener = urllib2.build_opener(proxy_handler, ContentEncodingProcessor)
@@ -194,12 +214,12 @@ def main():
     print('Updating delta')
     print('')
     
-    json_delta()
+    updated = json_delta()
 
     print('')
     
-    subprocess.call([os.path.join('bin','indexer'),'--rotate','libgendelta'])
-        
+    if updated:
+        subprocess.call([os.path.join('bin','indexer'),'--rotate','libgendelta'])
 
 if __name__ == '__main__':
     main()

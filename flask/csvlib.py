@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # ToDo:
-#   - fix NUL byte in CSV reader (Python bug)
+#   - fix NUL byte in CSV reader and writer (Python bug)
 #
 
 import os
@@ -15,9 +15,35 @@ class LibGenDialect(csv.Dialect):
     escapechar = None
     doublequote = True
     skipinitialspace = False
-    lineterminator = '\n'
-    quoting = csv.QUOTE_NONNUMERIC
+    lineterminator = '\n'   # instead of \r\n
+    quoting = csv.QUOTE_ALL
+    
+# Compatible with Excel
+# https://tools.ietf.org/html/rfc4180 
+class CSVStandardDialect(csv.Dialect):  
+    delimiter = ','
+    quotechar = '"'
+    escapechar = None
+    doublequote = True
+    skipinitialspace = False
+    lineterminator = '\r\n' # according to specs
+    quoting = csv.QUOTE_ALL # safest approach
 
+# Compatible with MySQL
+#   SELECT * FROM tbl
+#   INTO OUTFILE 'export.csv'
+#   FIELDS TERMINATED BY ','
+#   ENCLOSED BY '"'
+#   ESCAPED BY '\\'
+#   LINES TERMINATED BY '\r\n';
+class MySQLDialect(csv.Dialect):        
+    delimiter = ','
+    quotechar = '"'
+    escapechar = '\\'
+    doublequote = False
+    skipinitialspace = False
+    lineterminator = '\r\n' # MySQL docs provides an example: mysqldump --tab=/tmp --fields-terminated-by=, --fields-enclosed-by='"' --lines-terminated-by=0x0d0a db1
+    quoting = csv.QUOTE_ALL # Using csv.QUOTE_NONNUMERIC is a bad idea because it instructs the reader to convert all non-quoted fields to type float
 
 def open_csvfile(fpath,fext='.csv'):
     fname = os.path.basename(fpath)

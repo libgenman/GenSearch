@@ -99,8 +99,8 @@ def json_update(fpath,timeid,jsonapiurl):
     with open(fpath,'a+b') as csvfile:
         writer = csv.writer(csvfile,dialect=csvlib.LibGenDialect)
         
-        fields='*'
-        #fields = ','.join(csv_fields)
+        #fields='*'
+        fields = ','.join(csv_fields)
         
         while True:
             url = jsonapiurl + "?fields=%s&timenewer=%s&idnewer=%s&mode=newer" % (quote_plus(fields,','),quote_plus(timeid[0]),quote_plus(timeid[1]))

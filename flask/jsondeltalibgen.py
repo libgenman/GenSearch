@@ -20,13 +20,14 @@ from app import *
 
 UPDATE_DIR='delta'
 UPDATE_FILENAME='libgenupdate.csv'
+DATA_DIR='data'
 
 from gzip import GzipFile
 from StringIO import StringIO
 class ContentEncodingProcessor(urllib2.BaseHandler):
   """A handler to add gzip capabilities to urllib2 requests """
 
-  # add headers to requests   
+  # add headers to requests
   def http_request(self, req):
     req.add_header("Accept-Encoding", "gzip, deflate")
     return req
@@ -60,11 +61,11 @@ def deflate(data):   # zlib only provides the zlib compress format, not the defl
 
 
 def parse_csvfile_timeid(fpath):
-    
+
     csv_fields=app.config['CSV_FIELDS']
     id_pos = csv_fields.index('ID')
     time_pos = csv_fields.index('TimeLastModified')
-    
+
     timeid_first = None
     timeid_last = None
     rec_num = 0
@@ -77,7 +78,7 @@ def parse_csvfile_timeid(fpath):
                     timeid_first = (row[time_pos],row[id_pos])
                 timeid_last = (row[time_pos],row[id_pos])
                 rec_num = rec_num + 1
-            csvfile.close()            
+            csvfile.close()
             return timeid_first, timeid_last, rec_num
         except Exception as e:
             print('Bad update file, clearing it')
@@ -97,15 +98,15 @@ def json_update(fpath,timeid,jsonapiurl):
 
     jsonapi_retry_count = app.config['JSONAPI_RETRY_COUNT']
     jsonapi_retry_delay = app.config['JSONAPI_RETRY_DELAY']
-    
+
     updatednum = 0
-    
+
     with open(fpath,'a+b') as csvfile:
         writer = csv.writer(csvfile,dialect=csvlib.LibGenDialect)
-        
+
         #fields='*'
         fields = ','.join(csv_fields)
-        
+
         while True:
             url = jsonapiurl + "?fields=%s&timenewer=%s&idnewer=%s&mode=newer" % (quote_plus(fields,','),quote_plus(timeid[0]),quote_plus(timeid[1]))
             retry = 0
@@ -119,20 +120,20 @@ def json_update(fpath,timeid,jsonapiurl):
                         return False,0
                     print('Retry %s'%(str(e)))
                     time.sleep(jsonapi_retry_delay)
-            
+
             for data in datarows:
                 row=[]
                 for field in csv_fields:
                     row.append(data[field].replace('\0','\\0').encode('utf-8')) # avoid NUL otherwise csv.writer.writerow() will truncate the field
-                                    
+
                 timeid = (row[time_pos],row[id_pos])
                 updatednum = updatednum + 1
-                
+
                 writer.writerow(row)
-                
+
             if len(datarows)!=0:
                 print('JSON %s %s'%(timeid[0],timeid[1]))
-            
+
             if len(datarows)==0:
                 print('All done, no more new rows')
                 break
@@ -153,13 +154,13 @@ def maindb_timeid(indexname='libgenmain'):
     last_datetime = timestamp2datetime(timestamp)
     return last_datetime,last_id
 
-def json_delta():    
+def json_delta():
     timeid_main = maindb_timeid()
-    
+
     print('Main DB Last  %s %s'%(timeid_main[0],timeid_main[1]))
-    
+
     csvfpath=os.path.join(PROJECT_ROOT,UPDATE_DIR,UPDATE_FILENAME)
-    
+
     timeid_first, timeid_last, prevnum = parse_csvfile_timeid(csvfpath)
     if timeid_first:
         print('Delta First   %s %s'%(timeid_first[0],timeid_first[1]))
@@ -174,7 +175,7 @@ def json_delta():
             with open(csvfpath,'wb') as csvfile:
                 csvfile.truncate(0)
             timeid_last = timeid_main
-    
+
     print('Updating from %s %s'%(timeid_last[0],timeid_last[1]))
 
     updatednum = 0
@@ -211,7 +212,7 @@ def error_exit(msg):
     print('')
     raw_input('Press any key to continue...')
     sys.exit(1)
-    
+
 def main():
 
     proxy = app.config.setdefault('HTTP_PROXY', None)
@@ -221,15 +222,17 @@ def main():
     else:
         opener = urllib2.build_opener(ContentEncodingProcessor)
     urllib2.install_opener(opener)
-        
+
     print('Updating delta')
     print('')
-    
+
     updated,updatednum,prevnum = json_delta()
 
     print('')
 
     indexer = os.path.join('bin','indexer')
+
+    data_dir = os.path.join(PROJECT_ROOT,DATA_DIR)
 
     if not updated:
         error_exit('JSON update failed!!!')
@@ -238,18 +241,15 @@ def main():
         print('Delta records after update %d, retrieved %d'%(prevnum+updatednum, updatednum))
         print('')
 
-    
-        
-                
         merge_threshold = app.config.setdefault('DELTA_MERGE_THRESHOLD',50000)
         if prevnum+updatednum < merge_threshold:
-            
+
             if updatednum>0:
                 status = subprocess.call([indexer,'--rotate','libgendelta'])
                 if status!=0:
                     error_exit('Delta indexing FAILED!!!')
-                    
-        else:                                    
+
+        else:
             status = subprocess.call([indexer,'--rotate','libgendelta'])
             if status!=0:
                 error_exit('Delta indexing FAILED!!!')
@@ -257,9 +257,11 @@ def main():
             print('')
             print('Number of records %d is bigger than threshold value %d, running index merge'%(prevnum+updatednum,merge_threshold))
             print('')
-            
-            time.sleep(1) # give searchd some time to receive SIGHUP signal
-            
+
+            # wait searchd rotates after SIGHUP
+            while os.path.exists(os.path.join(data_dir,'lgdelta.new.spe')) or os.path.exists(os.path.join(data_dir,'lgdelta.old.spe')):
+                time.sleep(1)
+
             status = subprocess.call([indexer,'--rotate','--merge','libgenmain','libgendelta'])
             print('')
             if status!=0:
@@ -271,8 +273,10 @@ def main():
             with open(csvfpath,'wb') as csvfile:
                 csvfile.truncate(0)
 
-            time.sleep(1) # give searchd some time to receive SIGHUP signal
-            
+            # wait searchd rotates after SIGHUP
+            while os.path.exists(os.path.join(data_dir,'lgmain.new.spe')) or os.path.exists(os.path.join(data_dir,'lgmain.old.spe')):
+                time.sleep(1)
+
             print('Fixing delta index')
             print('')
             status = subprocess.call([indexer,'--rotate','libgendelta'])

@@ -67,24 +67,26 @@ def parse_csvfile_timeid(fpath):
     
     timeid_first = None
     timeid_last = None
+    rec_num = 0
     try:
-        csvfile=open(fpath,'r+b')           
+        csvfile=open(fpath,'r+b')
         try:
             reader = csv.reader(csvfile,dialect=csvlib.LibGenDialect)
             for row in reader:
                 if timeid_first == None:
                     timeid_first = (row[time_pos],row[id_pos])
                 timeid_last = (row[time_pos],row[id_pos])
+                rec_num = rec_num + 1
             csvfile.close()            
-            return timeid_first, timeid_last
+            return timeid_first, timeid_last, rec_num
         except Exception as e:
             print('Bad update file, clearing it')
             csvfile.seek(0)
             csvfile.truncate(0)
             csvfile.close()
-            return None, None
+            return None, None, 0
     except IOError:
-        return None, None
+        return None, None, 0
 
 
 def json_update(fpath,timeid,jsonapiurl):
@@ -95,6 +97,8 @@ def json_update(fpath,timeid,jsonapiurl):
 
     jsonapi_retry_count = app.config['JSONAPI_RETRY_COUNT']
     jsonapi_retry_delay = app.config['JSONAPI_RETRY_DELAY']
+    
+    updatednum = 0
     
     with open(fpath,'a+b') as csvfile:
         writer = csv.writer(csvfile,dialect=csvlib.LibGenDialect)
@@ -112,7 +116,7 @@ def json_update(fpath,timeid,jsonapiurl):
                     break
                 except (HTTPError, URLError) as e:
                     if retry > jsonapi_retry_count:
-                        return False
+                        return False,0
                     print('Retry %s'%(str(e)))
                     time.sleep(jsonapi_retry_delay)
             
@@ -122,6 +126,7 @@ def json_update(fpath,timeid,jsonapiurl):
                     row.append(data[field].replace('\0','\\0').encode('utf-8')) # avoid NUL otherwise csv.writer.writerow() will truncate the field
                                     
                 timeid = (row[time_pos],row[id_pos])
+                updatednum = updatednum + 1
                 
                 writer.writerow(row)
                 
@@ -132,7 +137,7 @@ def json_update(fpath,timeid,jsonapiurl):
                 print('All done, no more new rows')
                 break
 
-    return timeid
+    return timeid,updatednum
 
 def maindb_timeid(indexname='libgenmain'):
     mysql = MySQL(app)
@@ -146,7 +151,7 @@ def maindb_timeid(indexname='libgenmain'):
     maxid = 0 if res==None else res[0]
     last_id = str(maxid)
     last_datetime = timestamp2datetime(timestamp)
-    return (last_datetime,last_id)
+    return last_datetime,last_id
 
 def json_delta():    
     timeid_main = maindb_timeid()
@@ -155,7 +160,7 @@ def json_delta():
     
     csvfpath=os.path.join(PROJECT_ROOT,UPDATE_DIR,UPDATE_FILENAME)
     
-    timeid_first, timeid_last = parse_csvfile_timeid(csvfpath)
+    timeid_first, timeid_last, prevnum = parse_csvfile_timeid(csvfpath)
     if timeid_first:
         print('Delta First   %s %s'%(timeid_first[0],timeid_first[1]))
     if timeid_last:
@@ -172,6 +177,7 @@ def json_delta():
     
     print('Updating from %s %s'%(timeid_last[0],timeid_last[1]))
 
+    updatednum = 0
     somesuccess = False
     mirrorgroups = app.config['JSONAPI_URL_LIST']
     for num,mirrorlist in enumerate(mirrorgroups):
@@ -182,11 +188,12 @@ def json_delta():
         for mirrorurl in mirrorlist:
             print('')
             print('Updating from server %s'%(mirrorurl))
-            timeid = json_update(csvfpath,timeid_last,mirrorurl)
+            timeid,mirrorupdated = json_update(csvfpath,timeid_last,mirrorurl)
             if timeid==False:
                 print('Updating from server %s FAILED!'%(mirrorurl))
                 continue # proceeding to next server in this mirror group
             timeid_last = timeid
+            updatednum = updatednum + mirrorupdated
             somesuccess = True
             groupsuccess = True
             break
@@ -197,8 +204,14 @@ def json_delta():
     if not somesuccess:
         print('')
         print('ALL SERVERS FAILED!!!')
-    return somesuccess
+    return somesuccess,updatednum,prevnum
 
+def error_exit(msg):
+    print(msg)
+    print('')
+    raw_input('Press any key to continue...')
+    sys.exit(1)
+    
 def main():
 
     proxy = app.config.setdefault('HTTP_PROXY', None)
@@ -206,20 +219,66 @@ def main():
         proxy_handler = urllib2.ProxyHandler({'http': proxy})
         opener = urllib2.build_opener(proxy_handler, ContentEncodingProcessor)
     else:
-        opener = urllib2.build_opener(ContentEncodingProcessor)    
+        opener = urllib2.build_opener(ContentEncodingProcessor)
     urllib2.install_opener(opener)
         
-    app.config.setdefault('JSONAPI_URL','http://libgen.org/json.php')
-
     print('Updating delta')
     print('')
     
-    updated = json_delta()
+    updated,updatednum,prevnum = json_delta()
 
     print('')
-    
+
+    indexer = os.path.join('bin','indexer')
+
+    if not updated:
+        error_exit('JSON update failed!!!')
+
     if updated:
-        subprocess.call([os.path.join('bin','indexer'),'--rotate','libgendelta'])
+        print('Delta records after update %d, retrieved %d'%(prevnum+updatednum, updatednum))
+        print('')
+
+    
+        
+                
+        merge_threshold = app.config.setdefault('DELTA_MERGE_THRESHOLD',50000)
+        if prevnum+updatednum < merge_threshold:
+            
+            if updatednum>0:
+                status = subprocess.call([indexer,'--rotate','libgendelta'])
+                if status!=0:
+                    error_exit('Delta indexing FAILED!!!')
+                    
+        else:                                    
+            status = subprocess.call([indexer,'--rotate','libgendelta'])
+            if status!=0:
+                error_exit('Delta indexing FAILED!!!')
+
+            print('')
+            print('Number of records %d is bigger than threshold value %d, running index merge'%(prevnum+updatednum,merge_threshold))
+            print('')
+            
+            time.sleep(1) # give searchd some time to receive SIGHUP signal
+            
+            status = subprocess.call([indexer,'--rotate','--merge','libgenmain','libgendelta'])
+            print('')
+            if status!=0:
+                error_exit('Index merge FAILED!!!')
+
+            print('Clearing delta CSV')
+            print('')
+            csvfpath=os.path.join(PROJECT_ROOT,UPDATE_DIR,UPDATE_FILENAME)
+            with open(csvfpath,'wb') as csvfile:
+                csvfile.truncate(0)
+
+            time.sleep(1) # give searchd some time to receive SIGHUP signal
+            
+            print('Fixing delta index')
+            print('')
+            status = subprocess.call([indexer,'--rotate','libgendelta'])
+            print('')
+            if status!=0:
+                error_exit('Delta indexing FAILED!!!')
 
 if __name__ == '__main__':
     main()

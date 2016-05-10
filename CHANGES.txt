@@ -1,4 +1,13 @@
 
+Version 0.7 (2016-05-10):
+
+  * Filename field removed from database scheme.
+  * Duplicates in charset_table/ngram_chars fixed.
+  * Multi-server update.
+  * Automatic index merge.
+  * Workaround for weird problems with attribute order in mysql / xmlpipe2 sources.
+  * Hacked index rotation wait.
+
 Version 0.6 (2016-04-13):
 
   * Database schema update. Most update-critical settings moved to configuration file.

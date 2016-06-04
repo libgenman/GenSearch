@@ -124,7 +124,7 @@ def json_update(fpath,timeid,jsonapiurl):
             for data in datarows:
                 row=[]
                 for field in csv_fields:
-                    row.append(data[field].replace('\0','\\0').encode('utf-8')) # avoid NUL otherwise csv.writer.writerow() will truncate the field
+                    row.append(data[field.lower()].replace('\0','\\0').encode('utf-8')) # avoid NUL otherwise csv.writer.writerow() will truncate the field
 
                 timeid = (row[time_pos],row[id_pos])
                 updatednum = updatednum + 1
@@ -209,8 +209,8 @@ def json_delta():
 
 def error_exit(msg):
     print(msg)
-    print('')
-    raw_input('Press any key to continue...')
+    #print('')
+    #raw_input('Press any key to continue...')
     sys.exit(1)
 
 def main():
